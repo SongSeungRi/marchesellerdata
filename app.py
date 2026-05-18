@@ -272,6 +272,27 @@ def load_sales():
 
 
 @st.cache_data(ttl=0)
+def load_official_teams():
+    """공식 팀 목록 로드 - 정규팀리스트 기준"""
+    url = f"https://docs.google.com/spreadsheets/d/{CONFIG_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=" + quote("정규팀리스트") + ""
+    try:
+        raw = pd.read_csv(url, header=None, dtype=str)
+        header_row_idx = None
+        for i, row in raw.iterrows():
+            if any(str(v).strip() == "팀명" for v in row.values):
+                header_row_idx = i
+                break
+        if header_row_idx is None:
+            return set()
+        df = raw.iloc[header_row_idx+1:].copy()
+        df.columns = [str(v).strip() for v in raw.iloc[header_row_idx].values]
+        teams = df["팀명"].dropna().astype(str).str.strip().tolist()
+        return {t for t in teams if t not in ["", "nan", "팀명"]}
+    except:
+        return set()
+
+
+@st.cache_data(ttl=0)
 def load_weather():
     """시장 날씨/유동인구 데이터 로드"""
     dfs = []
@@ -740,12 +761,17 @@ def main():
         show_login(team_list_df)
     else:
         with st.spinner("데이터 불러오는 중..."):
-            sales_df   = load_sales()
-            weather_df = load_weather()
+            sales_df       = load_sales()
+            weather_df     = load_weather()
+            official_teams = load_official_teams()
 
         if sales_df.empty:
             st.error("매출 데이터를 불러올 수 없어요. 잠시 후 다시 시도해주세요.")
             return
+
+        # 공식 팀 목록으로 필터링 (목록이 있을 때만)
+        if official_teams:
+            sales_df = sales_df[sales_df["출점팀"].isin(official_teams)]
 
         # 관리자로 로그인했는데 팀이 없으면 첫 번째 팀으로 자동 설정
         if not st.session_state["team"] and not sales_df.empty:
