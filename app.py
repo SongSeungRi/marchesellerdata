@@ -57,11 +57,26 @@ def load_team_list():
     """정규팀 리스트 로드 (C열=팀명, P열=비밀번호, 4행 헤더, 5행~데이터)"""
     url = f"https://docs.google.com/spreadsheets/d/{CONFIG_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=" + quote("정규팀리스트") + ""
     try:
-        # skiprows=3: 1~3행 메모 건너뜀, 4행을 헤더로 사용
-        df = pd.read_csv(url, skiprows=3, header=0)
-        df.columns = [str(c).strip() for c in df.columns]
+        # 전체를 헤더 없이 읽은 뒤, "팀명" 텍스트가 있는 행을 헤더로 사용
+        raw = pd.read_csv(url, header=None, dtype=str)
 
-        # 컬럼 이름으로 직접 찾기 (위치 대신)
+        # "팀명" 이 들어있는 행 번호 찾기
+        header_row_idx = None
+        for i, row in raw.iterrows():
+            if any(str(v).strip() == "팀명" for v in row.values):
+                header_row_idx = i
+                break
+
+        if header_row_idx is None:
+            st.error("팀명 헤더 행을 찾을 수 없어요.")
+            return pd.DataFrame(columns=["팀명","비밀번호"])
+
+        # 헤더 행 이후 데이터만 추출
+        df = raw.iloc[header_row_idx+1:].copy()
+        df.columns = [str(v).strip() for v in raw.iloc[header_row_idx].values]
+        df = df.reset_index(drop=True)
+
+        # 컬럼 이름으로 찾기
         team_col = None
         pw_col   = None
         for c in df.columns:
@@ -71,15 +86,8 @@ def load_team_list():
             if "비밀번호" in cs:
                 pw_col = c
 
-        # 이름으로 못 찾으면 위치로 fallback
-        cols = df.columns.tolist()
-        if team_col is None and len(cols) > 2:
-            team_col = cols[2]
-        if pw_col is None and len(cols) > 15:
-            pw_col = cols[15]
-
         if team_col is None or pw_col is None:
-            st.error("팀명 또는 비밀번호 컬럼을 찾을 수 없어요.")
+            st.error(f"컬럼을 찾을 수 없어요. 컬럼 목록: {df.columns.tolist()}")
             return pd.DataFrame(columns=["팀명","비밀번호"])
 
         result = df[[team_col, pw_col]].copy()
@@ -87,13 +95,9 @@ def load_team_list():
         result["팀명"]     = result["팀명"].astype(str).str.strip()
         result["비밀번호"] = result["비밀번호"].astype(str).str.strip()
 
-        # 빈 행, 헤더 중복, 숫자(순번)만 있는 행 제거
-        result = result[result["팀명"] != ""]
-        result = result[result["팀명"] != "nan"]
-        result = result[result["팀명"] != "팀명"]
-        result = result[~result["팀명"].str.match(r"^\d+$")]  # 순번만 있는 행 제거
-        result = result[result["비밀번호"] != "nan"]
-        result = result[result["비밀번호"] != ""]
+        # 빈 행, nan, 헤더 중복 제거
+        result = result[~result["팀명"].isin(["", "nan", "팀명", "None"])]
+        result = result[~result["비밀번호"].isin(["", "nan", "None"])]
 
         return result.reset_index(drop=True)
     except Exception as e:
@@ -211,7 +215,12 @@ def show_login(team_list_df):
     st.markdown("#### 로그인")
     st.caption("팀명과 비밀번호를 입력해주세요. 초기 비밀번호는 팀명+0000 입니다.")
 
-    team_names = sorted(team_list_df["팀명"].tolist())
+    # 팀 목록 로드 실패 시 안내
+    if team_list_df.empty or "팀명" not in team_list_df.columns:
+        st.error("팀 목록을 불러오지 못했어요. 잠시 후 새로고침 해주세요.")
+        st.stop()
+
+    team_names = sorted(team_list_df["팀명"].dropna().tolist())
     selected_team = st.selectbox("팀 선택", ["-- 팀을 선택하세요 --"] + team_names)
     password_input = st.text_input("비밀번호", type="password", placeholder="비밀번호를 입력하세요")
 
