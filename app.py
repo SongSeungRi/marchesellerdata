@@ -1,4 +1,5 @@
 import streamlit as st
+from urllib.parse import quote
 import pandas as pd
 import plotly.graph_objects as go
 
@@ -54,7 +55,7 @@ st.markdown("""
 @st.cache_data(ttl=300)
 def load_team_list():
     """정규팀 리스트 로드 (C열=팀명, P열=비밀번호, 4행 헤더, 5행~데이터)"""
-    url = f"https://docs.google.com/spreadsheets/d/{CONFIG_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=정규팀리스트"
+    url = f"https://docs.google.com/spreadsheets/d/{CONFIG_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=" + quote("정규팀리스트") + ""
     try:
         df = pd.read_csv(url, header=3)  # 4행(index=3)이 헤더
         df.columns = [str(c).strip() for c in df.columns]
@@ -76,7 +77,7 @@ def load_team_list():
 @st.cache_data(ttl=300)
 def load_regular_markets():
     """정규시장 목록 로드 (A열=시장명)"""
-    url = f"https://docs.google.com/spreadsheets/d/{CONFIG_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=정규시장"
+    url = f"https://docs.google.com/spreadsheets/d/{CONFIG_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=" + quote("정규시장") + ""
     try:
         df = pd.read_csv(url, header=0)
         col = df.columns[0]
