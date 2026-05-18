@@ -365,17 +365,13 @@ def show_login(team_list_df):
         st.caption("관리자 비밀번호를 입력하세요.")
         admin_pw_input = st.text_input("관리자 비밀번호", type="password",
                                         placeholder="관리자 비밀번호 입력", key="admin_pw")
-        admin_team_sel = st.selectbox("조회할 팀 선택", ["-- 팀을 선택하세요 --"] + sorted(team_list_df["팀명"].dropna().tolist()), key="admin_team_sel")
 
         if st.button("관리자 로그인", type="primary", use_container_width=True, key="admin_login_btn"):
             if admin_pw_input.strip() == ADMIN_PASSWORD:
-                if admin_team_sel == "-- 팀을 선택하세요 --":
-                    st.error("조회할 팀을 선택해주세요.")
-                else:
-                    st.session_state["logged_in"] = True
-                    st.session_state["is_admin"]  = True
-                    st.session_state["team"] = admin_team_sel
-                    st.rerun()
+                st.session_state["logged_in"] = True
+                st.session_state["is_admin"]  = True
+                st.session_state["team"] = ""
+                st.rerun()
             else:
                 st.error("관리자 비밀번호가 올바르지 않습니다.")
 
@@ -397,6 +393,19 @@ def show_app(team, sales_df, weather_df, regular_markets):
           <p style="color:#3B6D11;margin:4px 0 0;font-size:12px">마르쉐 매출 조회</p>
         </div>
         """, unsafe_allow_html=True)
+
+        # 관리자 전용: 팀 전환 드롭다운
+        if is_admin:
+            all_teams = sorted(sales_df["출점팀"].dropna().unique().tolist())
+            selected = st.selectbox(
+                "📋 팀 전환 (관리자)",
+                options=all_teams,
+                index=all_teams.index(team) if team in all_teams else 0,
+                key="admin_team_switch"
+            )
+            if selected != team:
+                st.session_state["team"] = selected
+                st.rerun()
     with col_h2:
         st.write("")
         st.write("")
@@ -737,6 +746,11 @@ def main():
         if sales_df.empty:
             st.error("매출 데이터를 불러올 수 없어요. 잠시 후 다시 시도해주세요.")
             return
+
+        # 관리자로 로그인했는데 팀이 없으면 첫 번째 팀으로 자동 설정
+        if not st.session_state["team"] and not sales_df.empty:
+            st.session_state["team"] = sorted(sales_df["출점팀"].dropna().unique().tolist())[0]
+            st.rerun()
 
         show_app(
             st.session_state["team"],
