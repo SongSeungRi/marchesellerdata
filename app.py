@@ -599,7 +599,7 @@ def show_app(team, sales_df, weather_df, regular_markets):
 
         # 다중 선택 필터
         yr_opts = sorted(team_df["연도"].unique().tolist(), reverse=True)
-        mo_opts = sorted(team_df["월"].unique().tolist())
+        mo_opts = sorted([int(m) for m in team_df["월"].dropna().unique().tolist()])
         mk_opts = sorted(team_df["시장명"].dropna().unique().tolist())
 
         col1, col2, col3 = st.columns(3)
