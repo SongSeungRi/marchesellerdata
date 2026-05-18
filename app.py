@@ -415,8 +415,7 @@ def show_app(team, sales_df, weather_df, regular_markets):
                 color = "#0F6E56" if diff>=0 else "#D85A30"
                 col1, col2 = st.columns([4,1])
                 with col1:
-                    is_reg = "🔖 " if mk in regular_markets else ""
-                    st.markdown(f"**{is_reg}{mk}**")
+                    st.markdown(f"**{mk}**")
                     st.caption(f"내 평균 {my_mk:,.0f}원 | 전체 평균 {all_mk:,.0f}원 | {team_cat} 평균 {cat_mk:,.0f}원")
                     st.progress(min(my_mk/max(all_mk,1)/2, 1.0))
                 with col2:
@@ -433,7 +432,6 @@ def show_app(team, sales_df, weather_df, regular_markets):
             for i, r in enumerate(mk_strength):
                 dc = "#0F6E56" if r["차이"]>=0 else "#D85A30"
                 db = "#E0F5EE" if r["차이"]>=0 else "#FBE9E2"
-                is_reg = " 🔖" if r["시장명"] in regular_markets else ""
                 st.markdown(f"""
                 <div style="background:{'#EAF3DE' if i==0 else 'white'};
                             border:0.5px solid {'#3B6D11' if i==0 else '#C0DD97'};
@@ -441,7 +439,7 @@ def show_app(team, sales_df, weather_df, regular_markets):
                             display:flex;align-items:center;justify-content:space-between">
                   <div>
                     <span style="font-size:16px">{medals[i] if i<3 else '·'}</span>
-                    <strong style="margin-left:8px;color:#27500A">{r['시장명']}{is_reg}</strong>
+                    <strong style="margin-left:8px;color:#27500A">{r['시장명']}</strong>
                     <div style="font-size:11px;color:#5F5E5A;margin-top:3px;margin-left:26px">
                       내 평균 {r['내평균']:,.0f}원 · 전체 평균 {r['전체평균']:,.0f}원
                     </div>
