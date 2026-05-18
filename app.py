@@ -9,6 +9,7 @@ SALES_SHEET_ID   = "1-ATlZN-VmstKUkuee83nJhW-tAaEmojk0uPuC329ELY"
 WEATHER_SHEET_ID = "1TfQTCPs8W14Pb5Nn_KG4WtthtTa4k0XrfXSM_jedqIk"
 CONFIG_SHEET_ID  = "11g3CLTwzsDObWPNUkpLB3iJ45UbMpGC49G6VICwW12k"
 YEARS = [2023, 2024, 2025, 2026]
+ADMIN_PASSWORD = "farmers24@#$%"
 
 st.set_page_config(page_title="마르쉐 매출 조회", page_icon="🌿", layout="centered")
 
@@ -327,36 +328,56 @@ def show_login(team_list_df):
     </div>
     """, unsafe_allow_html=True)
 
-    st.markdown("#### 로그인")
-    st.caption("팀명과 비밀번호를 입력해주세요. 초기 비밀번호는 팀명+0000 입니다.")
+    # 로그인 탭 2개: 출점팀 / 관리자
+    login_tab1, login_tab2 = st.tabs(["🌿 출점팀 로그인", "🔑 관리자 로그인"])
 
-    # 팀 목록 로드 실패 시 안내
-    if team_list_df.empty or "팀명" not in team_list_df.columns:
-        st.error("팀 목록을 불러오지 못했어요. 잠시 후 새로고침 해주세요.")
-        st.stop()
+    # ── 출점팀 로그인 ──
+    with login_tab1:
+        st.caption("팀명과 비밀번호를 입력해주세요. 초기 비밀번호는 팀명+0000 입니다.")
 
-    team_names = sorted(team_list_df["팀명"].dropna().tolist())
-    selected_team = st.selectbox("팀 선택", ["-- 팀을 선택하세요 --"] + team_names)
-    password_input = st.text_input("비밀번호", type="password", placeholder="비밀번호를 입력하세요")
+        if team_list_df.empty or "팀명" not in team_list_df.columns:
+            st.error("팀 목록을 불러오지 못했어요. 잠시 후 새로고침 해주세요.")
+            st.stop()
 
-    if st.button("로그인", type="primary", use_container_width=True):
-        if selected_team == "-- 팀을 선택하세요 --":
-            st.error("팀을 선택해주세요.")
-            return
+        team_names = sorted(team_list_df["팀명"].dropna().tolist())
+        selected_team = st.selectbox("팀 선택", ["-- 팀을 선택하세요 --"] + team_names, key="team_sel")
+        password_input = st.text_input("비밀번호", type="password", placeholder="비밀번호를 입력하세요", key="team_pw")
 
-        # 비밀번호 확인
-        match = team_list_df[team_list_df["팀명"] == selected_team]
-        if match.empty:
-            st.error("등록되지 않은 팀입니다.")
-            return
+        if st.button("로그인", type="primary", use_container_width=True, key="team_login_btn"):
+            if selected_team == "-- 팀을 선택하세요 --":
+                st.error("팀을 선택해주세요.")
+            else:
+                match = team_list_df[team_list_df["팀명"] == selected_team]
+                if match.empty:
+                    st.error("등록되지 않은 팀입니다.")
+                else:
+                    correct_pw = str(match.iloc[0]["비밀번호"]).strip()
+                    if password_input.strip() == correct_pw:
+                        st.session_state["logged_in"] = True
+                        st.session_state["is_admin"]  = False
+                        st.session_state["team"] = selected_team
+                        st.rerun()
+                    else:
+                        st.error("비밀번호가 올바르지 않습니다.")
 
-        correct_pw = str(match.iloc[0]["비밀번호"]).strip()
-        if password_input.strip() == correct_pw:
-            st.session_state["logged_in"] = True
-            st.session_state["team"] = selected_team
-            st.rerun()
-        else:
-            st.error("비밀번호가 올바르지 않습니다.")
+    # ── 관리자 로그인 ──
+    with login_tab2:
+        st.caption("관리자 비밀번호를 입력하세요.")
+        admin_pw_input = st.text_input("관리자 비밀번호", type="password",
+                                        placeholder="관리자 비밀번호 입력", key="admin_pw")
+        admin_team_sel = st.selectbox("조회할 팀 선택", ["-- 팀을 선택하세요 --"] + sorted(team_list_df["팀명"].dropna().tolist()), key="admin_team_sel")
+
+        if st.button("관리자 로그인", type="primary", use_container_width=True, key="admin_login_btn"):
+            if admin_pw_input.strip() == ADMIN_PASSWORD:
+                if admin_team_sel == "-- 팀을 선택하세요 --":
+                    st.error("조회할 팀을 선택해주세요.")
+                else:
+                    st.session_state["logged_in"] = True
+                    st.session_state["is_admin"]  = True
+                    st.session_state["team"] = admin_team_sel
+                    st.rerun()
+            else:
+                st.error("관리자 비밀번호가 올바르지 않습니다.")
 
 
 # ════════════════════════════════════════════════════════════════
@@ -368,9 +389,11 @@ def show_app(team, sales_df, weather_df, regular_markets):
     # 헤더
     col_h1, col_h2 = st.columns([5, 1])
     with col_h1:
+        is_admin = st.session_state.get("is_admin", False)
+        admin_badge = ' <span style="background:#3B6D11;color:#EAF3DE;font-size:10px;padding:2px 8px;border-radius:20px;vertical-align:middle">관리자</span>' if is_admin else ""
         st.markdown(f"""
         <div class="hero">
-          <h2 style="color:#27500A;margin:0;font-size:20px">🌿 {team}</h2>
+          <h2 style="color:#27500A;margin:0;font-size:20px">🌿 {team}{admin_badge}</h2>
           <p style="color:#3B6D11;margin:4px 0 0;font-size:12px">마르쉐 매출 조회</p>
         </div>
         """, unsafe_allow_html=True)
@@ -697,6 +720,8 @@ def main():
         st.session_state["logged_in"] = False
     if "team" not in st.session_state:
         st.session_state["team"] = ""
+    if "is_admin" not in st.session_state:
+        st.session_state["is_admin"] = False
 
     # 데이터 로드
     team_list_df   = load_team_list()
