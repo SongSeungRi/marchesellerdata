@@ -168,7 +168,7 @@ def generate_pdf(team, show_df, total_sales, total_fund, yr_f="전체", mo_f="�
 
 
 # ── 데이터 로드 함수들 ─────────────────────────────────────────
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=0)
 def load_team_list():
     """정규팀 리스트 로드 (C열=팀명, P열=비밀번호, 4행 헤더, 5행~데이터)"""
     url = f"https://docs.google.com/spreadsheets/d/{CONFIG_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=" + quote("정규팀리스트") + ""
@@ -221,7 +221,7 @@ def load_team_list():
         return pd.DataFrame(columns=["팀명","비밀번호"])
 
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=0)
 def load_regular_markets():
     """정규시장 목록 로드 (A열=시장명)"""
     url = f"https://docs.google.com/spreadsheets/d/{CONFIG_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=" + quote("정규시장") + ""
@@ -235,7 +235,7 @@ def load_regular_markets():
         return ["농부시장@목동", "채소시장@서교", "농부시장@서울숲", "농부시장@국립극장"]
 
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=0)
 def load_sales():
     """매출 데이터 로드"""
     # 시장일(0)|시장명(1)|팀분류(2)|정규(3)|성격(4)|속성(5)|출점팀명(6)|매출총액(7)|지속가능기금(8)
@@ -271,7 +271,7 @@ def load_sales():
     return df.reset_index(drop=True)
 
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=0)
 def load_weather():
     """시장 날씨/유동인구 데이터 로드"""
     dfs = []
