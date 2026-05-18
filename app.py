@@ -96,8 +96,8 @@ def generate_pdf(team, show_df, total_sales, total_fund, yr_f="전체", mo_f="�
 
         # 필터 조건 표시
         filter_parts = []
-        if yr_f != "전체": filter_parts.append(f"연도: {yr_f}년")
-        if mo_f != "전체": filter_parts.append(f"월: {mo_f}월")
+        if yr_f != "전체": filter_parts.append(f"연도: {yr_f}")
+        if mo_f != "전체": filter_parts.append(f"월: {mo_f}")
         if mk_f != "전체": filter_parts.append(f"시장: {mk_f}")
         filter_str = " | ".join(filter_parts) if filter_parts else "전체 기간"
         elements.append(Paragraph(f"조회 조건: {filter_str}", filter_style))
@@ -597,19 +597,47 @@ def show_app(team, sales_df, weather_df, regular_markets):
     # ── 탭3: 전체 내역 ──────────────────────────────────────────
     with tab3:
 
-        # 필터
+        # 다중 선택 필터
+        yr_opts = sorted(team_df["연도"].unique().tolist(), reverse=True)
+        mo_opts = sorted(team_df["월"].unique().tolist())
+        mk_opts = sorted(team_df["시장명"].dropna().unique().tolist())
+
         col1, col2, col3 = st.columns(3)
         with col1:
-            yr_f = st.selectbox("연도", ["전체"]+sorted(team_df["연도"].unique().tolist(), reverse=True), key="r_yr")
+            yr_f = st.multiselect(
+                "연도 (복수 선택 가능)",
+                options=yr_opts,
+                default=[],
+                key="r_yr",
+                placeholder="전체"
+            )
         with col2:
-            mo_f = st.selectbox("월",   ["전체"]+list(range(1,13)), key="r_mo")
+            mo_f = st.multiselect(
+                "월 (복수 선택 가능)",
+                options=mo_opts,
+                default=[],
+                key="r_mo",
+                placeholder="전체",
+                format_func=lambda x: f"{x}월"
+            )
         with col3:
-            mk_f = st.selectbox("시장", ["전체"]+sorted(team_df["시장명"].dropna().unique().tolist()), key="r_mk")
+            mk_f = st.multiselect(
+                "시장 (복수 선택 가능)",
+                options=mk_opts,
+                default=[],
+                key="r_mk",
+                placeholder="전체"
+            )
 
         filtered = team_df.copy()
-        if yr_f != "전체": filtered = filtered[filtered["연도"]==int(yr_f)]
-        if mo_f != "전체": filtered = filtered[filtered["월"]==int(mo_f)]
-        if mk_f != "전체": filtered = filtered[filtered["시장명"]==mk_f]
+        if yr_f: filtered = filtered[filtered["연도"].isin(yr_f)]
+        if mo_f: filtered = filtered[filtered["월"].isin(mo_f)]
+        if mk_f: filtered = filtered[filtered["시장명"].isin(mk_f)]
+
+        # PDF용 필터 레이블
+        yr_label = ", ".join([f"{y}년" for y in yr_f]) if yr_f else "전체"
+        mo_label = ", ".join([f"{m}월" for m in mo_f]) if mo_f else "전체"
+        mk_label = ", ".join(mk_f) if mk_f else "전체"
 
         # 날씨 합치기
         if not weather_df.empty:
@@ -652,7 +680,7 @@ def show_app(team, sales_df, weather_df, regular_markets):
             )
         with col_b:
             # PDF 생성 후 다운로드
-            pdf_bytes = generate_pdf(team, show, total_s, total_f, yr_f, str(mo_f), mk_f)
+            pdf_bytes = generate_pdf(team, show, total_s, total_f, yr_label, mo_label, mk_label)
             st.download_button(
                 "🖨️ PDF 다운로드", pdf_bytes,
                 f"마르쉐_{team}_매출내역.pdf", "application/pdf",
