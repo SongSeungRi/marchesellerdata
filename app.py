@@ -53,17 +53,17 @@ st.markdown("""
 
 
 # ── PDF 생성 함수 ─────────────────────────────────────────────
-def generate_pdf(team, show_df, total_sales, total_fund):
+def generate_pdf(team, show_df, total_sales, total_fund, yr_f="전체", mo_f="전체", mk_f="전체"):
     """전체 내역을 PDF로 생성"""
     try:
         from reportlab.lib.pagesizes import A4
         from reportlab.lib import colors
-        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.styles import ParagraphStyle
         from reportlab.lib.units import mm
         from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
         from reportlab.pdfbase import pdfmetrics
         from reportlab.pdfbase.ttfonts import TTFont
-        import urllib.request, os, tempfile
+        import urllib.request, os
 
         # 나눔고딕 폰트 다운로드 (한글 지원)
         font_url = "https://github.com/google/fonts/raw/main/ofl/nanumgothic/NanumGothic-Regular.ttf"
@@ -72,44 +72,62 @@ def generate_pdf(team, show_df, total_sales, total_fund):
             urllib.request.urlretrieve(font_url, font_path)
         pdfmetrics.registerFont(TTFont("NanumGothic", font_path))
 
+        # A4 용지 실제 사용 가능한 폭 (mm)
+        # A4 = 210mm, 좌우 여백 각 15mm → 사용 폭 = 180mm
+        PAGE_W = 180 * mm
+
         buf = io.BytesIO()
         doc = SimpleDocTemplate(buf, pagesize=A4,
                                 rightMargin=15*mm, leftMargin=15*mm,
                                 topMargin=15*mm, bottomMargin=15*mm)
 
-        styles = getSampleStyleSheet()
-        title_style = ParagraphStyle("title", fontName="NanumGothic", fontSize=16,
-                                     spaceAfter=4, textColor=colors.HexColor("#27500A"))
+        title_style = ParagraphStyle("title", fontName="NanumGothic", fontSize=15,
+                                     spaceAfter=3, textColor=colors.HexColor("#27500A"))
         sub_style   = ParagraphStyle("sub",   fontName="NanumGothic", fontSize=10,
-                                     spaceAfter=12, textColor=colors.HexColor("#3B6D11"))
-        body_style  = ParagraphStyle("body",  fontName="NanumGothic", fontSize=9,
-                                     textColor=colors.HexColor("#27500A"))
+                                     spaceAfter=2, textColor=colors.HexColor("#3B6D11"))
+        filter_style = ParagraphStyle("filter", fontName="NanumGothic", fontSize=9,
+                                      spaceAfter=8, textColor=colors.HexColor("#5F5E5A"))
 
         elements = []
-        elements.append(Paragraph(f"🌿 마르쉐 매출 내역", title_style))
-        elements.append(Paragraph(f"{team}", sub_style))
+
+        # 제목
+        elements.append(Paragraph("마르쉐 출점팀 매출 내역", title_style))
+        elements.append(Paragraph(team, sub_style))
+
+        # 필터 조건 표시
+        filter_parts = []
+        if yr_f != "전체": filter_parts.append(f"연도: {yr_f}년")
+        if mo_f != "전체": filter_parts.append(f"월: {mo_f}월")
+        if mk_f != "전체": filter_parts.append(f"시장: {mk_f}")
+        filter_str = " | ".join(filter_parts) if filter_parts else "전체 기간"
+        elements.append(Paragraph(f"조회 조건: {filter_str}", filter_style))
         elements.append(Spacer(1, 4*mm))
 
-        # 요약 정보
+        # 요약 테이블 (3열 가로 배치)
         summary_data = [
-            ["총 출점 횟수", f"{len(show_df)}회"],
-            ["매출 합계",    f"{total_sales:,.0f}원"],
-            ["지속가능기금", f"{total_fund:,.0f}원"],
+            ["총 출점 횟수", "매출 합계", "지속가능기금"],
+            [f"{len(show_df)}회", f"{total_sales:,.0f}원", f"{total_fund:,.0f}원"],
         ]
-        summary_table = Table(summary_data, colWidths=[40*mm, 60*mm])
+        sw = PAGE_W / 3
+        summary_table = Table(summary_data, colWidths=[sw, sw, sw])
         summary_table.setStyle(TableStyle([
-            ("FONTNAME",    (0,0),(-1,-1), "NanumGothic"),
-            ("FONTSIZE",    (0,0),(-1,-1), 9),
-            ("BACKGROUND",  (0,0),(0,-1), colors.HexColor("#EAF3DE")),
-            ("TEXTCOLOR",   (0,0),(0,-1), colors.HexColor("#3B6D11")),
-            ("TEXTCOLOR",   (1,0),(1,-1), colors.HexColor("#27500A")),
-            ("GRID",        (0,0),(-1,-1), 0.5, colors.HexColor("#C0DD97")),
-            ("PADDING",     (0,0),(-1,-1), 6),
+            ("FONTNAME",   (0,0),(-1,-1), "NanumGothic"),
+            ("FONTSIZE",   (0,0),(-1,-1), 9),
+            ("BACKGROUND", (0,0),(-1,0),  colors.HexColor("#EAF3DE")),
+            ("TEXTCOLOR",  (0,0),(-1,0),  colors.HexColor("#3B6D11")),
+            ("TEXTCOLOR",  (0,1),(-1,-1), colors.HexColor("#27500A")),
+            ("FONTSIZE",   (0,1),(-1,-1), 11),
+            ("FONTNAME",   (0,1),(-1,-1), "NanumGothic"),
+            ("GRID",       (0,0),(-1,-1), 0.5, colors.HexColor("#C0DD97")),
+            ("ALIGN",      (0,0),(-1,-1), "CENTER"),
+            ("VALIGN",     (0,0),(-1,-1), "MIDDLE"),
+            ("PADDING",    (0,0),(-1,-1), 7),
         ]))
         elements.append(summary_table)
         elements.append(Spacer(1, 6*mm))
 
         # 상세 내역 테이블
+        # 컬럼 너비: 날짜(30) + 시장명(50) + 날씨(38) + 매출(32) + 지속가능기금(30) = 180mm
         headers = ["날짜", "시장명", "날씨", "매출", "지속가능기금"]
         data = [headers]
         for _, row in show_df.iterrows():
@@ -121,18 +139,22 @@ def generate_pdf(team, show_df, total_sales, total_fund):
                 str(row.get("지속가능기금", "")),
             ])
 
-        col_widths = [28*mm, 45*mm, 35*mm, 30*mm, 30*mm]
+        col_widths = [30*mm, 50*mm, 38*mm, 32*mm, 30*mm]
         table = Table(data, colWidths=col_widths, repeatRows=1)
         table.setStyle(TableStyle([
-            ("FONTNAME",    (0,0),(-1,-1), "NanumGothic"),
-            ("FONTSIZE",    (0,0),(-1,-1), 8),
-            ("BACKGROUND",  (0,0),(-1,0),  colors.HexColor("#EAF3DE")),
-            ("TEXTCOLOR",   (0,0),(-1,0),  colors.HexColor("#27500A")),
-            ("TEXTCOLOR",   (0,1),(-1,-1), colors.HexColor("#444")),
-            ("GRID",        (0,0),(-1,-1), 0.3, colors.HexColor("#C0DD97")),
-            ("ROWBACKGROUNDS", (0,1),(-1,-1), [colors.white, colors.HexColor("#F7FBF0")]),
-            ("PADDING",     (0,0),(-1,-1), 5),
-            ("ALIGN",       (3,0),(-1,-1), "RIGHT"),
+            ("FONTNAME",      (0,0),(-1,-1), "NanumGothic"),
+            ("FONTSIZE",      (0,0),(-1,-1), 8),
+            ("BACKGROUND",    (0,0),(-1,0),  colors.HexColor("#EAF3DE")),
+            ("TEXTCOLOR",     (0,0),(-1,0),  colors.HexColor("#27500A")),
+            ("FONTSIZE",      (0,0),(-1,0),  9),
+            ("TEXTCOLOR",     (0,1),(-1,-1), colors.HexColor("#333")),
+            ("GRID",          (0,0),(-1,-1), 0.3, colors.HexColor("#C0DD97")),
+            ("ROWBACKGROUNDS",(0,1),(-1,-1), [colors.white, colors.HexColor("#F7FBF0")]),
+            ("ALIGN",         (3,0),(-1,-1), "RIGHT"),
+            ("ALIGN",         (0,0),(1,-1),  "LEFT"),
+            ("ALIGN",         (2,0),(2,-1),  "CENTER"),
+            ("VALIGN",        (0,0),(-1,-1), "MIDDLE"),
+            ("PADDING",       (0,0),(-1,-1), 5),
         ]))
         elements.append(table)
 
@@ -140,7 +162,6 @@ def generate_pdf(team, show_df, total_sales, total_fund):
         return buf.getvalue()
 
     except Exception as e:
-        # reportlab 없으면 빈 바이트 반환
         st.error(f"PDF 생성 실패: {e}")
         return b""
 
@@ -631,7 +652,7 @@ def show_app(team, sales_df, weather_df, regular_markets):
             )
         with col_b:
             # PDF 생성 후 다운로드
-            pdf_bytes = generate_pdf(team, show, total_s, total_f)
+            pdf_bytes = generate_pdf(team, show, total_s, total_f, yr_f, str(mo_f), mk_f)
             st.download_button(
                 "🖨️ PDF 다운로드", pdf_bytes,
                 f"마르쉐_{team}_매출내역.pdf", "application/pdf",
