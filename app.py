@@ -168,7 +168,7 @@ def generate_pdf(team, show_df, total_sales, total_fund, yr_f="전체", mo_f="�
 
 
 # ── 데이터 로드 함수들 ─────────────────────────────────────────
-@st.cache_data(ttl=0)
+@st.cache_data(ttl=86400)
 def load_team_list():
     """정규팀 리스트 로드 (C열=팀명, P열=비밀번호, 4행 헤더, 5행~데이터)"""
     url = f"https://docs.google.com/spreadsheets/d/{CONFIG_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=" + quote("정규팀리스트") + ""
@@ -221,7 +221,7 @@ def load_team_list():
         return pd.DataFrame(columns=["팀명","비밀번호"])
 
 
-@st.cache_data(ttl=0)
+@st.cache_data(ttl=86400)
 def load_regular_markets():
     """정규시장 목록 로드 (A열=시장명)"""
     url = f"https://docs.google.com/spreadsheets/d/{CONFIG_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=" + quote("정규시장") + ""
@@ -235,7 +235,7 @@ def load_regular_markets():
         return ["농부시장@목동", "채소시장@서교", "농부시장@서울숲", "농부시장@국립극장"]
 
 
-@st.cache_data(ttl=0)
+@st.cache_data(ttl=86400)
 def load_sales():
     """매출 데이터 로드"""
     # 시장일(0)|시장명(1)|팀분류(2)|정규(3)|성격(4)|속성(5)|출점팀명(6)|매출총액(7)|지속가능기금(8)
@@ -271,7 +271,7 @@ def load_sales():
     return df.reset_index(drop=True)
 
 
-@st.cache_data(ttl=0)
+@st.cache_data(ttl=86400)
 def load_official_teams():
     """공식 팀 목록 로드 - 정규팀리스트 기준"""
     url = f"https://docs.google.com/spreadsheets/d/{CONFIG_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=" + quote("정규팀리스트") + ""
@@ -292,7 +292,7 @@ def load_official_teams():
         return set()
 
 
-@st.cache_data(ttl=0)
+@st.cache_data(ttl=86400)
 def load_weather():
     """시장 날씨/유동인구 데이터 로드"""
     dfs = []
@@ -435,6 +435,12 @@ def show_app(team, sales_df, weather_df, regular_markets):
             st.session_state["team"] = ""
             st.rerun()
 
+    # 관리자 전용: 데이터 새로고침 (시트 수정 후 즉시 반영)
+    if st.session_state.get("is_admin", False):
+        if st.button("🔄 데이터 새로고침 (시트 수정 후 눌러주세요)", use_container_width=True):
+            st.cache_data.clear()
+            st.rerun()
+
     tab1, tab2, tab3 = st.tabs(["🏠 홈", "📊 분석", "📋 전체 내역"])
 
 
@@ -517,27 +523,33 @@ def show_app(team, sales_df, weather_df, regular_markets):
         # ① 정규시장 필터 토글
         only_regular = st.toggle("정규시장만 보기", value=False)
 
-        # ② 시기 필터
+        # ② 시기 필터 (연도·월 복수 선택 가능, 비우면 전체)
         col_f1, col_f2 = st.columns(2)
         with col_f1:
-            yr_opts = ["전체"] + sorted(team_df["연도"].unique().tolist(), reverse=True)
-            a_yr = st.selectbox("연도", yr_opts, key="a_yr")
+            a_yr_opts = sorted(team_df["연도"].unique().tolist(), reverse=True)
+            a_yr = st.multiselect("연도 (복수 선택 가능)", a_yr_opts,
+                                  default=[], key="a_yr", placeholder="전체")
         with col_f2:
-            a_mo = st.selectbox("월", ["전체"] + list(range(1,13)), key="a_mo")
+            a_mo_opts = list(range(1, 13))
+            a_mo = st.multiselect("월 (복수 선택 가능)", a_mo_opts,
+                                  default=[], key="a_mo", placeholder="전체",
+                                  format_func=lambda x: f"{x}월")
 
         # 전체 데이터에도 동일 필터 적용
         filtered_all  = sales_df.copy()
         filtered_team = team_df.copy()
 
         if only_regular:
-            filtered_all  = filtered_all[filtered_all["시장명"].isin(regular_markets)]
-            filtered_team = filtered_team[filtered_team["시장명"].isin(regular_markets)]
-        if a_yr != "전체":
-            filtered_all  = filtered_all[filtered_all["연도"] == int(a_yr)]
-            filtered_team = filtered_team[filtered_team["연도"] == int(a_yr)]
-        if a_mo != "전체":
-            filtered_all  = filtered_all[filtered_all["월"] == int(a_mo)]
-            filtered_team = filtered_team[filtered_team["월"] == int(a_mo)]
+            # 정규시장 목록·데이터의 시장명 모두 공백 제거 후 비교 (표기 차이로 인한 누락 방지)
+            reg_set = {str(m).strip() for m in regular_markets}
+            filtered_all  = filtered_all[filtered_all["시장명"].astype(str).str.strip().isin(reg_set)]
+            filtered_team = filtered_team[filtered_team["시장명"].astype(str).str.strip().isin(reg_set)]
+        if a_yr:
+            filtered_all  = filtered_all[filtered_all["연도"].isin(a_yr)]
+            filtered_team = filtered_team[filtered_team["연도"].isin(a_yr)]
+        if a_mo:
+            filtered_all  = filtered_all[filtered_all["월"].isin(a_mo)]
+            filtered_team = filtered_team[filtered_team["월"].isin(a_mo)]
 
         if filtered_team.empty:
             st.warning("선택한 조건에 해당하는 데이터가 없어요.")
@@ -557,8 +569,8 @@ def show_app(team, sales_df, weather_df, regular_markets):
 
             filter_label = []
             if only_regular: filter_label.append("정규시장")
-            if a_yr != "전체": filter_label.append(f"{a_yr}년")
-            if a_mo != "전체": filter_label.append(f"{a_mo}월")
+            if a_yr: filter_label.append(", ".join(f"{y}년" for y in sorted(a_yr)))
+            if a_mo: filter_label.append(", ".join(f"{m}월" for m in sorted(a_mo)))
             filter_str = " · ".join(filter_label) if filter_label else "전체"
 
             st.markdown(f"""
